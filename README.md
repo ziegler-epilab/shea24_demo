@@ -1,0 +1,1 @@
+This is a basic overview of R packages and their application for data visualization applied to healthcare epidemiology and infection control. As time allows, I will include additional resources below.
