@@ -1,0 +1,328 @@
+---
+title: "SHEA Spring 2024 Data Visualization Demo"
+author: "Matthew Ziegler"
+date: "2024-03-26"
+output:
+  slidy_presentation:
+    fig_width: 12.5
+    font_adjustment: -1
+#output: powerpoint_presentation
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = TRUE, tidy=TRUE)
+```
+
+## Overview
+
+- A rapid overview of R
+- Importing and manipulating data
+- Visualizing data
+
+## R Introduction
+
+- R is a programming language useful for
+  - data 
+  - data visualization
+  - statistics
+- Typically used with a software interface
+  - RStudio
+  - VScode
+- Community derived "packages"
+- Resources: R for Data Science https://r4ds.had.co.nz
+
+## R Introduction
+
+- Why use a code-based approach to data manipulation?
+  - Reproducible
+  - Easy to share
+  - Infinitely modifiable
+
+## R Introduction
+
+- Download and install R
+- Download and install R Studio (or alternative)
+- Run scripts
+  - R Script
+  - R Markdown
+- Version control and collaboration via Github
+
+## Getting Started
+
+- Let's load some packages
+  - "tidyverse" is an open source collection of packages for working with data
+  - "dplyr" is a set of functions for data manipulation
+  -"ggplot2" is a system for creating graphics
+
+```{r, echo = TRUE, results = "hide"}
+library(dplyr)
+library(ggplot2)
+library(gt)
+```
+
+## Piping Data
+
+- Imagine your data is water
+- Through a series of pipes ( %>% ) you can
+  - transform your data
+  - feed data to generate different products
+
+data %>% 
+new_data %>% 
+tables
+
+data %>% 
+different_data %>% 
+figures
+
+## Loading our Data
+
+- Loading example data from CDC HAIC-Viz
+
+```{r}
+dat_cdiff <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/HAICViz_-_CDI_20240214.csv") %>%
+  janitor::clean_names() %>%
+  filter(topic =="Case rates (cases per 100,000)", 
+         series =="Community-associated"|series=="Healthcare-associated")
+```
+
+```{r}
+head(dat_cdiff)
+```
+
+## Let's do a simple graph
+
+- Start with your data
+- Pipe your data to ggplot - ggpplot()
+- Define the aesthetics either globally or individually by plot - aes()
+- Add your plots and labels - geom_line() + labs()
+
+```{r}
+dat_cdiff_line_plot <- dat_cdiff %>%
+  ggplot(aes(x = as.factor(year_name), y = value, group = series)) + 
+  geom_line(aes(linetype = series)) +
+  labs(title = "Cases by year", y = "CDI cases per 1000 individuals", x = "Year")
+```
+## Let's do a simple graph
+```{r, echo=FALSE}
+dat_cdiff_line_plot
+```
+
+## Let's do a simple graph
+
+- Don't like lines? - https://ggplot2.tidyverse.org/reference/
+
+```{r}
+dat_cdiff %>%
+  ggplot(aes(x = as.factor(year_name), y = value, fill= series)) + 
+  geom_col(position = "dodge") +
+  labs(title = "Cases by year", y = "CDI cases per 1000 individuals", x = "Year")
+```
+
+## A little more complicated
+
+```{r}
+library(tidyr)
+```
+
+```{r}
+dat_cdiff_cat_plot <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/HAICViz_-_CDI_20240214.csv") %>%
+  janitor::clean_names() %>%
+  filter(topic =="Case rates (cases per 100,000)") %>%
+  mutate(cat = case_when(
+    grepl("HA|CA", series) ==TRUE & grepl("years", series) ==TRUE  ~ "age",
+    grepl("Male|Female", series) ==TRUE & grepl("HA|CA", series) ==TRUE  ~ "sex",
+    grepl("White|Non-white", series) ==TRUE & grepl("HA|CA", series) ==TRUE ~ "race")) %>%
+  filter(!is.na(cat)) %>%
+  separate(series, into = c("category","group"), sep =" - ") %>%
+  ggplot(aes(x = as.factor(year_name), y = value, 
+             group = interaction(group, category),linetype = category, col = group,)) + 
+  geom_line(lwd =1) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0, hjust=0)) +
+  facet_wrap(vars(cat)) +
+  labs(title = "C.difficile Infection by Year", y = "Case rates (cases per 100,000)", x = "Year") 
+```
+
+
+## A little more complicated
+
+```{r}
+dat_cdiff_cat_plot
+```
+
+## Highlighting and annotating
+
+```{r}
+library(gghighlight)
+```
+
+```{r}
+dat_mdrgn <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/HAICViz_-_MuGSI_20240330.csv") %>%
+  janitor::clean_names() %>%
+  mutate(keep = case_when(
+    viewby =="Organism" & series != "All cases"  ~ 1,
+    organism =="CRAB" & viewby == "All cases" & topic =="Case Rates" ~ 1,
+    TRUE ~ 0
+  )) %>%
+  filter(keep ==1) %>%
+  mutate(series = ifelse(organism =="CRAB","Acinetobacter baumanii", series))
+```
+
+```{r}
+dat_mdrgn_plot <- dat_mdrgn %>%  
+  ggplot(aes(x = as.factor(year_name), y = value, group = series)) + 
+  geom_line(aes(linetype = series)) +
+  theme(axis.text.x = element_text(angle = 75, vjust = 0, hjust=0)) +
+  labs(title = "Cases by year - Carbapenem-Resistant GNB",
+       y = "Cases per 1000 individuals", x = "Year") +
+  gghighlight(series =="Acinetobacter baumanii") +
+  theme_minimal()
+```
+
+----
+
+```{r, echo=FALSE}
+dat_mdrgn_plot
+```
+
+## Animated figures
+
+```{r}
+library(magick)
+library(gganimate)
+library(maps)
+library(tidyr)
+```
+```{r}
+respi <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/Outpatient_Respiratory_Illness_Activity_Map_20240401.csv") %>%
+  janitor::clean_names() %>%
+  mutate(region = tolower(state)) %>%
+  separate(activity_level, into=c(NA, "level"), sep = " ") %>%
+  mutate(level = as.numeric(level)) %>%
+  filter(season =="2022-2023")
+
+states <- map_data("state")
+```
+
+```{r}
+region_dat_respi <- left_join(states, respi, by = "region")
+```
+
+```{r}
+gif_a <- region_dat_respi %>%
+ggplot(., aes(long, lat, group = group)) +
+  geom_polygon(aes(fill = level),
+               colour = alpha("white", 1/2), size = 0.05)  +
+  geom_polygon(data = states, colour = "black", fill = NA) +
+  scale_fill_gradientn(colours = terrain.colors(6))  +
+  theme_void() +
+  transition_time(week) +
+  labs(title = 'Respiratory Infection Activity 22-23 Season: Week {frame_time}') +
+  theme_minimal()
+
+gif_a <- animate(gif_a, width = 700, height = 480)
+```
+
+
+## Animate
+```{r}
+gif_b <- region_dat_respi %>%
+  #filter(!is.na(value)) %>%
+  ggplot(data = ., aes(y = level)) + geom_boxplot() +
+  labs(x = "", title = "National Value") +
+  theme(axis.text.x = element_blank()) +
+  transition_time(week)  
+  #enter_fade() + 
+  #exit_shrink() +
+  #ease_aes('sine-in-out') 
+
+gif_b <- animate(gif_b, width = 600, height = 480)
+```
+
+## Animate
+```{r}
+a_mgif <- image_read(gif_a)
+b_mgif <- image_read(gif_b)
+
+new_gif <- image_append(c(a_mgif[1], b_mgif[1]))
+for(i in 1:95){
+  combined <- image_append(c(a_mgif[i], b_mgif[i]))
+  new_gif <- c(new_gif, combined)
+}
+```
+
+----
+
+```{r, echo=FALSE}
+new_gif
+```
+
+## Plotting Model Output
+
+```{r}
+library(gtsummary)
+library(marginaleffects)
+
+latitude_by_states <- states %>%
+  group_by(region) %>%
+  summarise(mean_lat = mean(lat))
+
+```
+## Plotting Model Output
+```{r}
+vaccination <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/Vaccination_Coverage_among_Health_Care_Personnel_20240401.csv") %>%
+  janitor::clean_names() %>%
+  mutate(year = as.numeric(substr(season,1,4))) %>%
+  mutate(region = tolower(geography)) %>%
+  left_join(latitude_by_states, by = "region") %>%
+  rename(latitude = mean_lat) %>%
+  filter(personnel_type != "All Health Care Personnel")
+```
+
+## Plotting Model Output
+```{r}
+model <- lm(estimate ~ year + latitude + personnel_type, dat = vaccination)
+```
+
+## Plotting Model Output
+```{r}
+tbl_regression(model)
+```
+
+## Plotting Model Output
+```{r, eval = FALSE}
+plot_predictions(model, condition = "year") +
+  labs(y = "Estimated Proportion: Vaccine Compliance", x= "Year", 
+       title = "Estimated Vaccine Compliance by Year") +
+  theme_minimal()
+```
+
+## Plotting Model Output
+```{r, echo = FALSE}
+plot_predictions(model, condition = "year") +
+  labs(y = "Estimated Proportion: Vaccine Compliance", x= "Year", 
+       title = "Estimated Vaccine Compliance by Year") +
+  theme_minimal()
+```
+
+## What Else?
+- Tons of styles, themes, fonts
+- Combine different plots with patchwork
+- Creae interactive graphs, hover over to reveal specific information (ggplotly, shiny)
+- Choose a color pallet from the Metropolitan Museum of Art (metbrewer)
+
+## Conclusions
+- Code-based data manipulations and visualization is highly flexible
+- Tons of great free-to-use, open-source packages
+
+## Resources
+- Start with the basics (https://r4ds.had.co.nz)
+- If you have a problem, someone has probably figured it out (https://stackoverflow.com)
+- Lots of great videos and lectures available
+- This presentation is available as an RMD file (R MarkDown File)
+
+## Citations
+
+- https://www.cdc.gov/hai/eip/haicviz.html
