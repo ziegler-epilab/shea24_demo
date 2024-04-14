@@ -2,16 +2,16 @@
 title: "SHEA Spring 2024 Data Visualization Demo"
 author: "Matthew Ziegler"
 date: "2024-03-26"
-output:
-  slidy_presentation:
-    fig_width: 12.5
-    font_adjustment: -1
-#output: powerpoint_presentation
+# output:
+#   slidy_presentation:
+#     fig_width: 12.5
+#     font_adjustment: -1
+output: powerpoint_presentation
 
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = TRUE, tidy=TRUE)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = TRUE, tidy=TRUE, dpi = 300)
 ```
 
 ## Overview
@@ -88,7 +88,8 @@ dat_cdiff <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/HAICViz_-_CDI_2
 ```
 
 ```{r}
-head(dat_cdiff)
+head(dat_cdiff) %>%
+  gt()
 ```
 
 ## Let's do a simple graph
@@ -326,3 +327,21 @@ plot_predictions(model, condition = "year") +
 ## Citations
 
 - https://www.cdc.gov/hai/eip/haicviz.html
+
+```{r}
+#devtools::session_info()
+
+# citation("base")
+# citation("ggplot2")
+# citation("gt")
+# # citation("dplyr")
+# citation("tidyr")
+# # citation("gghighlight")
+# citation("magick")
+# # citation("gganimate")
+# citation("maps")
+# # citation("gtsummary")
+# # citation("marginaleffects")
+
+```
+
