@@ -81,14 +81,16 @@ figures
 - Loading example data from CDC HAIC-Viz
 
 ```{r}
-dat_cdiff <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/HAICViz_-_CDI_20240214.csv") %>%
+dat_cdiff <- read.csv("/Users/matthewziegler/Documents/GitHub/shea24_demo/HAICViz_-_CDI_20240214.csv") %>%
   janitor::clean_names() %>%
   filter(topic =="Case rates (cases per 100,000)", 
          series =="Community-associated"|series=="Healthcare-associated")
 ```
 
 ```{r}
-head(dat_cdiff) %>%
+dat_cdiff %>%
+  select(year_name, series, value, series, topic) %>%
+  slice_sample(n=10) %>%
   gt()
 ```
 
@@ -128,21 +130,24 @@ library(tidyr)
 ```
 
 ```{r}
-dat_cdiff_cat_plot <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/HAICViz_-_CDI_20240214.csv") %>%
+dat_cdiff_cat_plot <- read.csv("/Users/matthewziegler/Documents/GitHub/shea24_demo/HAICViz_-_CDI_20240214.csv") %>%
   janitor::clean_names() %>%
   filter(topic =="Case rates (cases per 100,000)") %>%
-  mutate(cat = case_when(
+  mutate(class = case_when(
     grepl("HA|CA", series) ==TRUE & grepl("years", series) ==TRUE  ~ "age",
     grepl("Male|Female", series) ==TRUE & grepl("HA|CA", series) ==TRUE  ~ "sex",
     grepl("White|Non-white", series) ==TRUE & grepl("HA|CA", series) ==TRUE ~ "race")) %>%
-  filter(!is.na(cat)) %>%
-  separate(series, into = c("category","group"), sep =" - ") %>%
+  filter(!is.na(class)) %>%
+  separate(series, into = c("onset","group"), sep =" - ") %>%
+  rename(description = topic) 
+
+dat_cdiff_cat_plot %>%
   ggplot(aes(x = as.factor(year_name), y = value, 
-             group = interaction(group, category),linetype = category, col = group,)) + 
+             group = interaction(group, onset),linetype = onset, col = group,)) + 
   geom_line(lwd =1) +
   theme_minimal() +
   theme(axis.text.x = element_text(angle = 75, vjust = 0, hjust=0)) +
-  facet_wrap(vars(cat)) +
+  facet_wrap(vars(class)) +
   labs(title = "C.difficile Infection by Year", y = "Case rates (cases per 100,000)", x = "Year") 
 ```
 
@@ -150,7 +155,12 @@ dat_cdiff_cat_plot <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/HAICVi
 ## A little more complicated
 
 ```{r}
-dat_cdiff_cat_plot
+library(gt)
+
+dat_cdiff_cat_plot %>%
+  select(year_name, value, description, class, onset, group) %>%
+  slice_sample(n=10) %>%
+  gt()
 ```
 
 ## Highlighting and annotating
@@ -160,7 +170,7 @@ library(gghighlight)
 ```
 
 ```{r}
-dat_mdrgn <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/HAICViz_-_MuGSI_20240330.csv") %>%
+dat_mdrgn <- read.csv("/Users/matthewziegler/Documents/GitHub/shea24_demo/HAICViz_-_MuGSI_20240330.csv") %>%
   janitor::clean_names() %>%
   mutate(keep = case_when(
     viewby =="Organism" & series != "All cases"  ~ 1,
@@ -168,24 +178,29 @@ dat_mdrgn <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/HAICViz_-_MuGSI
     TRUE ~ 0
   )) %>%
   filter(keep ==1) %>%
-  mutate(series = ifelse(organism =="CRAB","Acinetobacter baumanii", series))
+  mutate(series = ifelse(organism =="CRAB","Acinetobacter baumanii", series)) %>%
+  select(-organism) %>%
+  rename(organism = series)
 ```
 
 ```{r}
 dat_mdrgn_plot <- dat_mdrgn %>%  
-  ggplot(aes(x = as.factor(year_name), y = value, group = series)) + 
-  geom_line(aes(linetype = series)) +
+  ggplot(aes(x = as.factor(year_name), y = value, group = organism)) + 
+  geom_line(aes(linetype = organism)) +
   theme(axis.text.x = element_text(angle = 75, vjust = 0, hjust=0)) +
   labs(title = "Cases by year - Carbapenem-Resistant GNB",
        y = "Cases per 1000 individuals", x = "Year") +
-  gghighlight(series =="Acinetobacter baumanii") +
+  gghighlight(organism =="Acinetobacter baumanii") +
   theme_minimal()
 ```
 
 ----
 
 ```{r, echo=FALSE}
-dat_mdrgn_plot
+dat_mdrgn %>%
+  select(-keep) %>%
+  slice_sample(n=10) %>%
+  gt()
 ```
 
 ## Animated figures
@@ -196,8 +211,9 @@ library(gganimate)
 library(maps)
 library(tidyr)
 ```
+
 ```{r}
-respi <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/Outpatient_Respiratory_Illness_Activity_Map_20240401.csv") %>%
+respi <- read.csv("/Users/matthewziegler/Documents/GitHub/shea24_demo/Outpatient_Respiratory_Illness_Activity_Map_20240401.csv") %>%
   janitor::clean_names() %>%
   mutate(region = tolower(state)) %>%
   separate(activity_level, into=c(NA, "level"), sep = " ") %>%
@@ -212,52 +228,63 @@ region_dat_respi <- left_join(states, respi, by = "region")
 ```
 
 ```{r}
-gif_a <- region_dat_respi %>%
-ggplot(., aes(long, lat, group = group)) +
-  geom_polygon(aes(fill = level),
-               colour = alpha("white", 1/2), size = 0.05)  +
-  geom_polygon(data = states, colour = "black", fill = NA) +
-  scale_fill_gradientn(colours = terrain.colors(6))  +
-  theme_void() +
-  transition_time(week) +
-  labs(title = 'Respiratory Infection Activity 22-23 Season: Week {frame_time}') +
-  theme_minimal()
+region_dat_respi %>%
+  select(region, season, week, level, activity_level_label, long, lat) %>%
+  slice_sample(n=10) %>%
+  gt()
+```
 
-gif_a <- animate(gif_a, width = 700, height = 480)
+
+```{r}
+# gif_a <- region_dat_respi %>%
+# ggplot(., aes(long, lat, group = group)) +
+#   geom_polygon(aes(fill = level),
+#                colour = alpha("white", 1/2), size = 0.05)  +
+#   geom_polygon(data = states, colour = "black", fill = NA) +
+#   scale_fill_gradientn(colours = terrain.colors(6))  +
+#   theme_void() +
+#   transition_time(week) +
+#   labs(title = 'Respiratory Infection Activity 22-23 Season: Week {frame_time}') +
+#   theme_minimal()
+# 
+# gif_a <- animate(gif_a, width = 700, height = 480)
 ```
 
 
 ## Animate
 ```{r}
-gif_b <- region_dat_respi %>%
-  #filter(!is.na(value)) %>%
-  ggplot(data = ., aes(y = level)) + geom_boxplot() +
-  labs(x = "", title = "National Value") +
-  theme(axis.text.x = element_blank()) +
-  transition_time(week)  
-  #enter_fade() + 
-  #exit_shrink() +
-  #ease_aes('sine-in-out') 
-
-gif_b <- animate(gif_b, width = 600, height = 480)
+# gif_b <- region_dat_respi %>%
+#   #filter(!is.na(value)) %>%
+#   ggplot(data = ., aes(y = level)) + geom_boxplot() +
+#   labs(x = "", title = "National Value") +
+#   theme(axis.text.x = element_blank()) +
+#   transition_time(week)
+#   #enter_fade() +
+#   #exit_shrink() +
+#   #ease_aes('sine-in-out')
+# 
+# gif_b <- animate(gif_b, width = 600, height = 480)
 ```
 
 ## Animate
 ```{r}
-a_mgif <- image_read(gif_a)
-b_mgif <- image_read(gif_b)
-
-new_gif <- image_append(c(a_mgif[1], b_mgif[1]))
-for(i in 1:95){
-  combined <- image_append(c(a_mgif[i], b_mgif[i]))
-  new_gif <- c(new_gif, combined)
-}
+# print(gif_a)
+# print(gif_b)
+# 
+# a_mgif <- image_read(gif_a)
+# b_mgif <- image_read(gif_b)
+# 
+# new_gif <- image_append(c(a_mgif[1], b_mgif[1]))
+# for(i in 1:95){
+#   combined <- image_append(c(a_mgif[i], b_mgif[i]))
+#   new_gif <- c(new_gif, combined)
+# }
 ```
 
 ----
 
 ```{r, echo=FALSE}
-new_gif
+# new_gif
 ```
 
 ## Plotting Model Output
@@ -273,7 +300,7 @@ latitude_by_states <- states %>%
 ```
 ## Plotting Model Output
 ```{r}
-vaccination <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/Vaccination_Coverage_among_Health_Care_Personnel_20240401.csv") %>%
+vaccination <- read.csv("/Users/matthewziegler/Documents/GitHub/shea24_demo/Vaccination_Coverage_among_Health_Care_Personnel_20240401.csv") %>%
   janitor::clean_names() %>%
   mutate(year = as.numeric(substr(season,1,4))) %>%
   mutate(region = tolower(geography)) %>%
@@ -281,6 +308,14 @@ vaccination <- read.csv("/Users/mattz/Documents/GitHub/shea24_demo/Vaccination_C
   rename(latitude = mean_lat) %>%
   filter(personnel_type != "All Health Care Personnel")
 ```
+
+```{r}
+vaccination %>%
+  select(vaccine, region, year, personnel_type, estimate, sample_size, latitude) %>%
+  slice_sample(n=10) %>%
+  gt()
+```
+
 
 ## Plotting Model Output
 ```{r}
@@ -295,7 +330,7 @@ tbl_regression(model)
 ## Plotting Model Output
 ```{r, eval = FALSE}
 plot_predictions(model, condition = "year") +
-  labs(y = "Estimated Proportion: Vaccine Compliance", x= "Year", 
+  labs(y = "Estimated Percentage: Vaccine Compliance", x= "Year", 
        title = "Estimated Vaccine Compliance by Year") +
   theme_minimal()
 ```
@@ -303,7 +338,14 @@ plot_predictions(model, condition = "year") +
 ## Plotting Model Output
 ```{r, echo = FALSE}
 plot_predictions(model, condition = "year") +
-  labs(y = "Estimated Proportion: Vaccine Compliance", x= "Year", 
+  labs(y = "Estimated Percentage: Vaccine Compliance", x= "Year", 
+       title = "Estimated Vaccine Compliance by Year") +
+  theme_minimal()
+```
+
+```{r, echo = FALSE}
+plot_predictions(model, condition = c("year", "personnel_type")) +
+  labs(y = "Estimated Percentage: Vaccine Compliance", x= "Year", 
        title = "Estimated Vaccine Compliance by Year") +
   theme_minimal()
 ```
